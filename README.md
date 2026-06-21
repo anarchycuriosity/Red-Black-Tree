@@ -1,4 +1,12 @@
 # Red-Black tree
+
+> 中文学习提示：本仓库在不改变上游算法逻辑的前提下，为 `rbtree.h` 和 `main.cpp`
+> 补充了面向零基础读者的中文注释。建议先阅读项目根目录下
+> `learning-in-pro/002_cpp_language_mechanisms_in_reference_project.md`，再按“公开接口 →
+> BST 查找/插入 → 左右旋 → 插入修复 → 删除修复 → 不变量验证”的顺序阅读源码。
+> 这份参考实现含有 GNU 扩展、变长数组和已过时的 `random_shuffle`，用于学习算法与测试思路，
+> 不应原样复制为课程作业。
+
 This is an implementation of a self-balancing binary search tree. The tree is using a
 generic element type. This implementation is focused on performance instead of an elegant
 solution that would be easier to understand. Note that all operations are in-place destructive
