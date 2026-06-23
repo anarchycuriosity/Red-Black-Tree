@@ -41,7 +41,7 @@ class RBTree
             DOUBLE_BLACK = 2,
         };
 
-        T key;      // 节点保存的值；T 至少需要支持 ==、< 和 > 比较。
+        T key;        // 节点保存的值；T 至少需要支持 ==、< 和 > 比较。
         Color color;  // 颜色不是装饰，而是维护从根到叶子黑高一致的状态信息。
 
         RBTreeNode* parent;  // 父指针让旋转和删除修复可以向上回溯。
@@ -140,7 +140,7 @@ class RBTree
 
 // Tree nodes
 template <typename T>
-RBTree<T>::RBTreeNode::RBTreeNode(const T key, RBTree<T>* tree)
+RBTree<T>::RBTreeNode::RBTreeNode(const T key, RBTree<T>* tree)  // 只有键和树的构造函数
 {
     this->left = NULL;
     this->right = NULL;
@@ -151,7 +151,7 @@ RBTree<T>::RBTreeNode::RBTreeNode(const T key, RBTree<T>* tree)
 }
 
 template <typename T>
-RBTree<T>::RBTreeNode::RBTreeNode(const T key, RBTreeNode* parent, RBTree<T>* tree, Color color)
+RBTree<T>::RBTreeNode::RBTreeNode(const T key, RBTreeNode* parent, RBTree<T>* tree, Color color)  // 键，父母，树，颜色
 {
     this->left = NULL;
     this->right = NULL;
@@ -162,7 +162,7 @@ RBTree<T>::RBTreeNode::RBTreeNode(const T key, RBTreeNode* parent, RBTree<T>* tr
 }
 
 template <typename T>
-RBTree<T>::RBTreeNode::~RBTreeNode()
+RBTree<T>::RBTreeNode::~RBTreeNode()  // 节点的析构函数
 {
     if (this->left != NULL)
     {
@@ -236,7 +236,11 @@ bool RBTree<T>::RBTreeNode::insert(const T key)
 
     return true;
 }
-
+// 为什么我们需要不断往上排查呢？
+// 因为查父亲和uncle让它们不断一起被染黑其实就是在不断收敛的过程
+// 它保证分叉的两端的黑高相同，如果只染一边就会不同
+// 为什么要把祖父染成红色，因为父亲和uncle染成黑色了，我们需要保证在这个分支上黑红对冲
+// 如果不怎么做，在更宏观的地方，两条分支的黑高就会不对等，红黑树的设计就失效了
 template <typename T>
 void RBTree<T>::RBTreeNode::adjustInsert(RBTreeNode* insertNode)
 {
@@ -291,7 +295,9 @@ void RBTree<T>::RBTreeNode::adjustInsert(RBTreeNode* insertNode)
                 if (grand->left != NULL && node == grand->left->right)
                 {
                     parent->leftRotate();
-                    node = node->left;
+                    node = node->left;  // 这个很关键
+                    // 在父亲发生一次旋转之后，孩子被转了上来成为真正的父亲，成为锚点
+                    // 如果旋转之后不把node移到底下的话，下一次旋转就会错乱，而且无法判断后面到底应该左旋还是右旋
                 }
                 else if (grand->right != NULL && node == grand->right->left)
                 {
@@ -300,8 +306,10 @@ void RBTree<T>::RBTreeNode::adjustInsert(RBTreeNode* insertNode)
                 }
 
                 // Update pointers after the rotation
-                parent = node->parent;
-                grand = node->parent->parent;
+                // 为什么需要更新，因为旋转完了之后，parent被转到了下面了，它只是有着parent的名字，但其实不是真正的parent了
+                // node的parent才是真正的parent，因为bridge才代表正确的关系，以node为参照进行更改即可
+                parent = node->parent;         // 这样从上到下的顺序再次变回grand -> parent -> node
+                grand = node->parent->parent;  // 其实这句没有必要写。。
 
                 // The node will not be a subtree of the grandparent
                 if (node == parent->left)
@@ -312,7 +320,7 @@ void RBTree<T>::RBTreeNode::adjustInsert(RBTreeNode* insertNode)
                 {
                     grand->leftRotate();
                 }
-
+                // 旋转之后要父祖换色，或者换色之后再旋转祖父
                 parent->color = BLACK;
                 grand->color = RED;
             }
@@ -333,11 +341,22 @@ void RBTree<T>::RBTreeNode::leftRotate()
     RBTreeNode* root = this->right;
 
     // 先收养中间子树，再让 root 收养 this。顺序很重要，否则可能丢失 root->left。
-    this->right = root->left;
+    this->right = root->left;  // 这里的left非常重要，因为它的值的范围被严格限制在了this和root之间
+    // 所以可以作为新的根
+    // 这里不要有直线的概念，因为直线与否是更大的层面需要考虑的
+    // 如果不是直线，则多次旋转，如果是直线，旋转一次就够了
+    // 比如RR型对this进行一次左旋即可
+    // 此时this的右指针就是nullptr，相当于断开和原来右孩子的连接
+    // this原本只有右孩子，断开之后就是啥都没有了，变成叶子节点
     root->left = this;
     root->parent = this->parent;
 
     // 把原外部父亲指向新的局部根 root；若 this 原来是左孩子，root 仍占左槽位。
+
+    // 这里一定要注意把出现的节点的各个成员都改了
+    // 比如this和root的父亲左右孩子
+    // 还要注意修改原根this的父亲和它们之间的桥梁，也就是孩子关系
+    // 左旋和this的左子树没有关系
     if (this->parent != NULL)
     {
         if (this->parent->left == this)
