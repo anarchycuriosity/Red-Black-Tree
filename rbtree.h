@@ -6,6 +6,9 @@
 #ifndef RBTREE_H
 #define RBTREE_H
 
+#include <iterator>
+#include <vector>
+
 // 【阅读导航】
 // 这是一个“类模板 + 头文件实现”的红黑树。建议按下面顺序阅读：
 // 1. 先看 RBTree 的公开接口 contains/insert/remove；
@@ -84,6 +87,29 @@ class RBTree
     }* root;  // 这种写法等价于先结束 RBTreeNode 类定义，再声明 RBTreeNode* root。
 
    public:
+    // 这是提供给“界面层”的只读节点快照。
+    //
+    // 为什么不直接把 RBTreeNode 改成 public？
+    // 因为界面一旦能修改 parent、left、right、color，就可能轻易破坏红黑树。
+    // 快照只复制绘图需要的数据，不暴露真实指针，前端因此只能“看”，不能“改”。
+    struct VisualizationNode
+    {
+        T key;
+        bool is_black;
+        int parent_index;
+        int left_index;
+        int right_index;
+
+        VisualizationNode(const T& node_key, bool node_is_black, int node_parent_index)
+            : key(node_key),
+              is_black(node_is_black),
+              parent_index(node_parent_index),
+              left_index(-1),
+              right_index(-1)
+        {
+        }
+    };
+
     RBTree();
     // 当前类同样没有派生用法，virtual 不是必需；这是参考项目原有设计。
     virtual ~RBTree();
@@ -91,6 +117,7 @@ class RBTree
     bool contains(const T key);
     bool insert(const T key);
     bool remove(const T key);
+    std::vector<VisualizationNode> visualization_snapshot() const;
 
 #ifdef DEBUG
     bool invariant();
@@ -450,10 +477,11 @@ void RBTree<T>::RBTreeNode::remove()
         this->key = node->key;
     }
 
-    // 此时 node 至多有一个孩子；三目运算符选择那个非空孩子，二者都空则得到 NULL。
+    // 因为node是最小值了，所以它不可能还有左孩子，它最多只有一个右孩子。
+    //  此时 node 至多有一个孩子；三目运算符选择那个非空孩子，二者都空则得到 NULL。
     RBTreeNode* child = (node->left == NULL) ? node->right : node->left;
 
-    // Detach the node from the tree
+    // 这里主要是把child和node连起来
     if (node->parent == NULL)
     {
         node->tree->root = child;
@@ -467,7 +495,8 @@ void RBTree<T>::RBTreeNode::remove()
         node->parent->right = child;
     }
 
-    // Update the childs parent link
+    // 反正我们要删除node，那就让node的父亲成为child的父亲
+    // 此时node的parent依然连着parent
     if (child != NULL)
     {
         child->parent = node->parent;
@@ -774,6 +803,49 @@ bool RBTree<T>::remove(const T key)
             return true;
         }
     }
+}
+
+template <typename T>
+std::vector<typename RBTree<T>::VisualizationNode> RBTree<T>::visualization_snapshot() const
+{
+    std::vector<VisualizationNode> snapshot;
+
+    if (root == NULL)
+    {
+        return snapshot;
+    }
+
+    // work_nodes 与 snapshot 使用相同下标：
+    // work_nodes 保存真实节点，仅在本函数内部短暂使用；
+    // snapshot 保存复制后的安全数据，交给界面长期使用。
+    std::vector<RBTreeNode*> work_nodes;
+    work_nodes.push_back(root);
+    snapshot.push_back(VisualizationNode(root->key, root->isBlack(), -1));
+
+    for (std::size_t index = 0; index < work_nodes.size(); ++index)
+    {
+        RBTreeNode* current_node = work_nodes[index];
+
+        if (current_node->left != NULL)
+        {
+            int child_index = static_cast<int>(work_nodes.size());
+            work_nodes.push_back(current_node->left);
+            snapshot.push_back(
+                VisualizationNode(current_node->left->key, current_node->left->isBlack(), static_cast<int>(index)));
+            snapshot[index].left_index = child_index;
+        }
+
+        if (current_node->right != NULL)
+        {
+            int child_index = static_cast<int>(work_nodes.size());
+            work_nodes.push_back(current_node->right);
+            snapshot.push_back(
+                VisualizationNode(current_node->right->key, current_node->right->isBlack(), static_cast<int>(index)));
+            snapshot[index].right_index = child_index;
+        }
+    }
+
+    return snapshot;
 }
 
 // iterator
